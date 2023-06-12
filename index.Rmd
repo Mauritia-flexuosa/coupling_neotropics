@@ -7,11 +7,10 @@ output:
   pdf_document: default
 ---
 
-
 ### Data from [Dexter et al. (2018)](https://www.frontiersin.org/articles/10.3389/fevo.2018.00104/full)
 
 ```{r, echo=F, warning=FALSE, include=FALSE}
-source("/home/mcure/Documents/Dexter/anomalia/classificação.R")
+source("./classification.R")
 ```
 
 ### [Dexter et al. (2018)](https://www.frontiersin.org/articles/10.3389/fevo.2018.00104/full) used a classification of communities leaf flush regimes based on species composition. Communities were classified into Deciduous, Semideciduous and Evergreen.
@@ -32,10 +31,16 @@ source("/home/mcure/Documents/Dexter/anomalia/classificação.R")
 
 ### We used EVI2 (i.e. a vegetation index) time series from Sentinel-2 as a proxy for vegetation greenness.
 
+### We selected sample points with less than 35% of missing EVI2 values.
+
+### We excluded sample points that changed its vegetation cover between 2000 and 2021 according to Mapbiomas collection 7.
+
+### We analyzed ```r dim(dados)[1]``` points spread along the tropical Brazilian biomes.
+
 ### We used statistical parameters of the vegetation index time series that capture the behaviour of vegetation greenness over time.
 
 ```{r echo=FALSE}
-data.frame(Variables = colnames(dados_kmeans[,-c(1,8,9,12,13)]))
+data.frame(Variables = colnames(dados_kmeans[,-c(1,8,9,12,13,14)]))
 
 ```
 
@@ -57,7 +62,7 @@ cluster
 
 ## **PCA**
 
-#### We also performed a Principal Component Analysis with the variables. The first two components explain 78.77% of variance in data.
+#### We also performed a Principal Component Analysis with the variables. The first two components explain 80.35% of variance in data.
 
 ### *Importance of the PCs*
 
@@ -102,10 +107,10 @@ fviz_cluster(km.res,
 
 ### **Number of communities classified in each group and coloured by floristic leaf flush regime classification**
 
-### Distribution of leaf flush regimes are mixed within groups and did not present a consistent separation among these communities with the variables used in the k-means algorithm. The k-means clusterization with all variables (except those showing the annual cycle) did not separate distinct leaf flushes in its second group. For example, the number of evergreens attributed to the second group are close to the number of deciduous and semideciduous communities.
+### Distribution of leaf flush regimes are mixed within groups and did not present a consistent separation among these communities with the variables used in the k-means algorithm. The k-means clusterization with all variables (except those showing the annual cycle) did not separate distinct leaf flushes in its second group. For example, the number of evergreens attributed to the second group are close to the number of deciduous and semideciduous communities. Thus, those variables may not good proxies for vegetation leaf flush regimes based on floristic composition.
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
-detach("package:poorman", unload = TRUE)
+#detach("package:poorman", unload = TRUE)
  dados_kmeans_scaled %>% add_column(group = km.res$cluster) %>% 
   dplyr::group_by(group, Leaf_flush) %>% 
   dplyr::summarise(n = n()) %>% 
@@ -136,16 +141,16 @@ grupos_labeller <- function(variable,value){
   return(grupos[value])
 }
 
-month <- rep(colnames(mon.df[,-dim(mon.df)[2]]), dim(mon.df[,-dim(mon.df)[2]])[2])
+month <- rep(colnames(mon.df), dim(mon.df)[2])
 
-dataa <- reshape2::melt(mon.df[,-13]  %>% 
-                         add_column(plot_id = completoRN1$plot_id),
+dataa <- reshape2::melt(mon.df  %>% 
+                         add_column(plot_id = dados$plot_id),
                        id.vars = "plot_id",
                        variable.name = "month",
                        value.name = "evi2")
 
 dataa <- dataa %>%
-  add_column(Leaf_flush = rep(completoRN1$Leaf_flush, 12)) %>% 
+  add_column(Leaf_flush = rep(dados$Leaf_flush, 12)) %>% 
   add_column(group = rep(km.res$cluster, 12))
 
 
@@ -168,24 +173,21 @@ dataa %>%
 
 ## **Random Forest classification**
 
-### The performance of the k-means algorithm using the variables that resume the annual cycle of EVI2 and its oscillation, mean, entropy and so on, was not so good according with the mean silhouette Score.
-
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-silhouette <- silhouette(km.res$cluster, dist(scale(dados_kmeans[,-c(1,8,9,12,13)])))
+library(cluster)
+silhouette <- silhouette(km.res$cluster, dist(scale(dados_kmeans[,-c(1,8,9,12,13,14)])))
 mean_silhouette <- mean(silhouette[, "sil_width"])
-
-mean_silhouette %>%
-  data.frame %>%
-  rename(`Mean Silhouette Score` = ".") 
 ```
 
-### To improve the separation of leaf flush regimes based on the greenness behavior we added the mean EVI2 values for each month as explicative variables to capture differences among vegetation types.
+### The performance of the k-means algorithm using the variables that resume the annual cycle of EVI2 and its oscillation, mean, entropy and so on, was not so good according with the mean silhouette Score (`r mean_silhouette`).
 
-### We performed a random forest to test if the selected variables are good predictors of the leaf flush regime classification based on species composition.
+### To improve the separation of leaf flush regimes based on the greenness behavior **we added the mean EVI2 values for each month as explicative variables** to capture differences among vegetation types.
+
+### We performed a random forest model to test if the selected variables are good predictors of the leaf flush regime classification based on species composition.
 
 ### Random forest model is built based on a subset of variables selected to grow a decision tree, thus performing automatic variable selection.
 
-### We used the function randomForest from the R package randomForest. Using the function parameter ntree, we choose 5000 trees to grow to guarantee that each input row receives predictions multiple times. We choose 3 variables selected randomly as candidates for each split setting the parameter mtry to 3.
+### We used the function *randomForest* from the R package *randomForest.* Using the function parameter *ntree*, we choose 5000 trees to grow to guarantee that each input row receives predictions multiple times. We choose 3 variables selected randomly as candidates for each split setting the parameter *mtry* to 3.
 
 ### **Data used for random forest classification**
 
@@ -194,7 +196,7 @@ mean_silhouette %>%
 ### We used all months of the year (Jan, Feb, Mar, ..., Dec). Month values are the monthly mean EVI2 for each sample point.
 
 ```{r, echo=FALSE}
-data.frame(Variables = colnames(dados_kmeans1[,-c(1,8,9,12,13)]))
+data.frame(Variables = colnames(dados_kmeans1[,-c(1,8,9,12,13,14)]))
 ```
 
 ### **Error by trees built**
@@ -205,11 +207,16 @@ data.frame(Variables = colnames(dados_kmeans1[,-c(1,8,9,12,13)]))
 plot(modelo_rf)
 ```
 
+```{r}
+modelo_rf
+```
+
+
 ### **Importance of variables**
 
 ### This metric shows the total reduction in node impurities achieved by splitting on the variable across all trees. In classification tasks, the impurity of a node is measured using the Gini index. As higher Gini Index is as more important the variable is for the random forest model.
 
-### Mean EVI2 in *September*, *October* and *August* are the most important variables to classify leaf flush regimes in accordance with the floristic-based classification.
+### Mean EVI2 in *September*, *October*, *minimum EVI2* and *August* are the most important variables to classify leaf flush regimes in accordance with the floristic-based classification.
 
 ```{r, echo=FALSE}
 importance(modelo_rf, type = 2)
@@ -294,6 +301,7 @@ factoextra::fviz_nbclust(data_scaled, kmeans, method = "silhouette")
 
 ```{r, echo=FALSE, warning=FALSE}
 library(e1071)
+set.seed(1234)
 res.fuzzy <- cmeans(data_scaled, centers = 2, iter.max = 1000, m = 1.25, verbose = FALSE, dist = "euclidean")$membership
 # Maior peso dentre todos os grupos.
 z <- res.fuzzy[,1:2]
@@ -327,7 +335,7 @@ data_fuz <- cbind(group = as.factor(group), dados_kmeans1, weight = weight$.) %>
 
 ### **Number of communities classified in each cluster**
 
-### C-means clusterization allowed us to separate floristic-deciduous and evergreen communities, while semideciduous ones became well represented in both groups. However, despite being a minority, there are deciduous communities that behave like evergreens and vice versa.
+### C-means clusterization allowed us to separate floristic-deciduous and evergreen communities, while semideciduous ones became well represented in both groups. However, despite being a minority, there are deciduous communities that behave like evergreens and vice versa. Only three evergreen communities were set to the group 2, two communities in the Cerrado and only one in the Amazonia.
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 #detach("package:poorman", unload = TRUE)
@@ -350,63 +358,47 @@ data_fuz %>%
      
 ```
 
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+data_fuz %>%
+  dplyr::group_by(group, Leaf_flush) %>% 
+  dplyr::summarise(n = n())
+```
+
 ### **Spatial distribution of groups coloured by floristic leaf flush regime classification**
 
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
-library(patchwork)
-(data_fuz %>% 
-  add_column(lat = completoRN1$lat) %>% 
-  add_column(lon = completoRN1$lon) %>%
-  ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
-  scale_color_manual(values = c("purple", "green3", "orange")) + 
-  geom_point(show.legend = F)+
-  facet_wrap(~group, labeller = grupos_labeller)+
-  ggtitle("Spatial distribution by group")+
-  xlim(c(-75, -35))+
-  ylim(c(-30, 10))+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  theme(axis.title.y = element_text(size = 12),
-        axis.title.x = element_text(size = 12),
-        axis.text.y = element_text(size = 10)))/(reshape2::melt(mon.df[,-dim(mon.df)[2]]  %>% 
-                         add_column(plot_id = completoRN1$plot_id),
-                       id.vars = "plot_id",
-                       variable.name = "month",
-                       value.name = "evi2") %>%
-  add_column(Leaf_flush = rep(completoRN1$Leaf_flush,12))%>%
-    add_column(group = rep(group,12)) %>%
-        filter(evi2 > 0) %>% 
-  ggplot(aes(y = evi2, x = month, color = factor(Leaf_flush), alpha = 0.6))+
-  geom_boxplot(show.legend = F)+
-  scale_color_manual(values = c("purple", "green3", "orange"))+
-  labs(color = "Leaf flush")+
-  guides(size = "none", alpha = "none")+
-  facet_wrap(~factor(group), labeller = grupos_labeller)+
-  theme(axis.title.y = element_text(size = 12),
-        axis.title.x = element_text(size = 12),
-        axis.text.y = element_text(size = 10),
-        axis.text.x = element_text(angle = 90, size = 8))+
-    ggtitle("Annual cycle by group")+
-    xlab("Month"))
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dados %>%
+  add_column(group = data_fuz$group) %>%
+  group_by(Domain, Leaf_flush, group) %>%
+  summarise(n = n())
+```
 
-
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+dados %>%
+  add_column(group = data_fuz$group) %>%
+  group_by(Domain, Leaf_flush, group) %>%
+  summarise(n = n()) %>% 
+  ggplot(aes(y = n, x = group, color = factor(Leaf_flush), alpha = 0.6))+
+  geom_jitter(show.legend = F)+
+  facet_wrap(~Domain)+
+    scale_color_manual(values = c("purple", "green3", "orange")) 
 ```
 
 ### **Annual cycle by group**
 
-### The first group shows the highest amplitude in the mean EVI2 in accordance with deciduous vegetation behavior for all leaf flush regimes previously asigned for each community. The first group shows that even evergreen dominated communities may behave as deciduous one, but presenting mean EVI2 values higher than those of both deciduous and semideciduous communities. The first group also presented a lower mean EVI2 than the second group. In the second group, all types of communities have a lower oscilation than those from the first group. Evergreen communities, in the second group, present an increase in the mean EVI2 from May to October, while deciduous and semideciduous communities increase greenness in October and September respectively.
+### The second group shows the highest amplitude in the mean EVI2 in accordance with deciduous vegetation behavior for all leaf flush regimes previously asigned for each community. The second group shows that even evergreen dominated communities may behave as deciduous one, but presenting mean EVI2 values higher than those of both deciduous and semideciduous communities. The second group also presented a lower mean EVI2 than the first group. In the first group, all types of communities have a lower oscilation than those from the second group. Evergreen communities, in the first group, present an increase in the mean EVI2 from May to October, while deciduous and semideciduous communities increase greenness in October and September respectively.
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-month <- rep(colnames(mon.df[,-dim(mon.df)[2]]), dim(mon.df[,-dim(mon.df)[2]])[2])
+month <- rep(colnames(mon.df), dim(mon.df)[2])
 
-data <- reshape2::melt(mon.df[,-dim(mon.df)[2]]  %>% 
-                         add_column(plot_id = completoRN1$plot_id),
+data <- reshape2::melt(mon.df  %>% 
+                         add_column(plot_id = dados$plot_id),
                        id.vars = "plot_id",
                        variable.name = "month",
                        value.name = "evi2")
 
 data <- data %>%
-  add_column(Leaf_flush = rep(completoRN1$Leaf_flush, 12)) %>% 
+  add_column(Leaf_flush = rep(dados$Leaf_flush, 12)) %>% 
   add_column(group = rep(data_fuz$group, 12))
 
 data %>%
@@ -426,6 +418,198 @@ data %>%
     xlab("Month")
 ```
 
+```{r, echo=FALSE, warning=FALSE, message=FALSE, ref.label="w" }
+library(patchwork)
+(data_fuz %>% 
+  add_column(lat = dados$lat) %>% 
+  add_column(lon = dados$lon) %>%
+  ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
+  scale_color_manual(values = c("purple", "green3", "orange")) + 
+  geom_point(show.legend = F)+
+  facet_wrap(~group, labeller = grupos_labeller)+
+  ggtitle("Spatial distribution by group")+
+  xlim(c(-75, -35))+
+  ylim(c(-30, 10))+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  theme(axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        axis.text.y = element_text(size = 10)))/(reshape2::melt(mon.df  %>% 
+                         add_column(plot_id = dados$plot_id),
+                       id.vars = "plot_id",
+                       variable.name = "month",
+                       value.name = "evi2") %>%
+  add_column(Leaf_flush = rep(dados$Leaf_flush,12))%>%
+    add_column(group = rep(group,12)) %>%
+        filter(evi2 > 0) %>% 
+  ggplot(aes(y = evi2, x = month, color = factor(Leaf_flush), alpha = 0.6))+
+  geom_boxplot(show.legend = F)+
+  scale_color_manual(values = c("purple", "green3", "orange"))+
+  labs(color = "Leaf flush")+
+  guides(size = "none", alpha = "none")+
+  facet_wrap(~factor(group), labeller = grupos_labeller)+
+  theme(axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        axis.text.y = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, size = 8))+
+    ggtitle("Annual cycle by group")+
+    xlab("Month"))
+
+
+```
+
+## Evergreen from group 2
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+meia_dois <- dados$dados1 %>% pluck(62) %>% 
+  as.data.frame()
+
+plot_62 <- dados$dados1 %>% pluck(62) %>% 
+  as.data.frame() %>% 
+ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Evergreen from Amazon", subtitle = "Classified as group 2")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+tres720 <- dados %>%
+  filter(plot_id == 3720) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_3720 <- tres720 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Evergreen from Cerrado", subtitle = "Classified as group 2")
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+tres764 <- dados %>%
+  filter(plot_id == 3764) %>% 
+  dplyr::select(dados1) %>% 
+  unnest(cols = c(dados1))
+
+plot_3764 <- tres764 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Evergreen from Cerrado II", subtitle = "Classified as group 2")
+
+treze23 <- dados %>%
+  filter(plot_id == 1323) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_1323 <- treze23 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Evergreen from Atlantic Forest", subtitle = "Classified as group 2")
+
+quinze41 <- dados %>%
+  filter(plot_id == 1541) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_1541 <- quinze41 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Evergreen from Atlantic Forest", subtitle = "Classified as group 2")
+
+
+(plot_62 + labs(x = NULL))
+
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(patchwork)
+(plot_3720 + labs(x = NULL))/(plot_3764)
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+(plot_1323 + labs(x = NULL))/(plot_1541)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dois336 <- dados %>%
+  filter(plot_id == 2336) %>% 
+  dplyr::select(dados1) %>% 
+  unnest(cols = c(dados1))
+
+dois366 <- dados %>%
+  filter(plot_id == 2366) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+dois342 <- dados %>%
+  filter(plot_id == 2342) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_2336 <- dois336 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Deciduous from Caatinga", subtitle = "Classified as group 1")
+
+plot_2366 <- dois366 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Deciduous from Caatinga II", subtitle = "Classified as group 1")
+
+plot_2342 <- dois342 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Deciduous from Caatinga III", subtitle = "Classified as group 1")
+
+(plot_2336+xlab(NULL))/(plot_2366)
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+tres254 <- dados %>%
+  filter(plot_id == 3254) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_3254 <- tres254 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Deciduous from Caatinga IV", subtitle = "Classified as group 1")
+
+
+
+(plot_2342+xlab(NULL))/plot_3254
+```
+
+
 ## **2. Question:**
 
 ### How distinct vegetation types respond to seasonal fluctuations in rainfall across the neotropical biomes?
@@ -442,23 +626,24 @@ data %>%
 
 ### The coupling by lag in months are similar between groups, however, within groups, leaf flush regimes present differences in response to precipitation. It means that the annual cycle is related with leaf flush regime classification of communities, but is not related with vegetation response to precipitation while the leaf flush regime classification is. (**What?**)
 
-### The coupling of evergreen communities is in phase with the response of semideciduous and deciduous communities. Negative coupling predominates for evergreen communities. In other words, greenness decrease with precipitation (Maybe due to clouds during rainy months and to waterlogging). Contrary, semideciduous and deciduous communities have more positive coupling indicating vegetation respond to rainfall by increasing greenness. 
+### The coupling of evergreen communities is in phase with the response of semideciduous and deciduous communities. Negative coupling predominates for evergreen communities. In other words, greenness decrease with precipitation (Maybe due to clouds during rainy months and to waterlogging). Contrary, semideciduous and deciduous communities have more positive coupling indicating vegetation respond to rainfall by increasing greenness.
 
 ### Semideciduous communities have similar behavior of deciduous ones but still present a lower coupling than deciduous communities. Semideciduous communities are known to be composed by a mix of evergreen and deciduous species. Semideciduous communities with more evergreen (deciduous) species would turn responses more similar with evergreen (deciduous) communities.
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-data_vid <- completoRN1 %>%
-  pivot_longer(cols = c("lag.0","lag.1","lag.2","lag.3","lag.4","lag.5","lag.6"), values_to = "Lag") %>% 
-  add_column(group = rep(data_fuz$group,7)) 
+data_vid <- dados %>%
+  pivot_longer(cols = c("lag.0","lag.1","lag.2","lag.3","lag.4"), values_to = "Lag") %>% 
+  add_column(group = rep(data_fuz$group,5)) 
 
 
 data_vid <- data_vid %>%
-  mutate(name = substr(data_vid$name, 5, 5) %>% as.numeric)
+  add_column(name1 = substr(data_vid$name, 5, 5) %>% as.numeric)
 
 data_vid %>% 
-  filter(name <=4) %>% 
-  ggplot(aes(x = factor(name), y = Lag, fill = factor(Leaf_flush), alpha = 0.6))+
+  filter(name1 <=4) %>% 
+  ggplot(aes(x = factor(name1), y = Lag, fill = factor(Leaf_flush), alpha = 0.6))+
   geom_boxplot(outlier.shape = NA)+
+#  geom_violin(draw_quantiles = T)+
   facet_wrap(~group, dir = "v", labeller = grupos_labeller)+
   labs(fill = "Leaf flush", x = "Lag", y = "Coupling")+
   guides(alpha = "none")+
@@ -474,7 +659,6 @@ data_vid %>%
 
 ### The figure bellow shows the *coupling for each lag in month*. Lag equals zero means the coupling is for the current month, lag equals one means the coupling is for one month after the rainfall and so on.
 
-
 ![](coupling3.gif)
 
 ## **Maximum coupling**
@@ -486,7 +670,7 @@ data_vid %>%
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 
 data_fuz %>% 
-  add_column(map = completoRN1$map) %>% 
+  add_column(map = dados$map) %>% 
 #  filter(coupling >= 0) %>% 
   ggplot(aes(x = map, y = coupling, color = factor(Leaf_flush), alpha = 0.6)) +
   geom_point(show.legend = F)+
@@ -506,8 +690,8 @@ data_fuz %>%
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 (data_fuz %>% 
-  add_column(lat = completoRN1$lat) %>% 
-  add_column(lon = completoRN1$lon) %>%
+  add_column(lat = dados$lat) %>% 
+  add_column(lon = dados$lon) %>%
   filter(coupling >= 0) %>%
   ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
   scale_color_manual(values = c("purple", "green3", "orange")) + 
@@ -521,8 +705,8 @@ data_fuz %>%
   theme(axis.title.y = element_text(size = 12),
         axis.title.x = element_blank(),
         axis.text.y = element_text(size = 10)))/(data_fuz %>% 
-  add_column(lat = completoRN1$lat) %>% 
-  add_column(lon = completoRN1$lon) %>%
+  add_column(lat = dados$lat) %>% 
+  add_column(lon = dados$lon) %>%
   filter(coupling < 0) %>%
   ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
   scale_color_manual(values = c("purple", "green3", "orange")) + 
@@ -546,7 +730,7 @@ data_fuz %>%
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 data_fuz %>% 
-  add_column(map = completoRN1$map) %>% 
+  add_column(map = dados$map) %>% 
   ggplot(aes(x = map, y = abs(coupling), color = factor(Leaf_flush), alpha = 0.6)) +
   geom_point(show.legend = F)+
   geom_smooth(method = "lm")+
