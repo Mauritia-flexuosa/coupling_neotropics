@@ -418,42 +418,62 @@ data %>%
     xlab("Month")
 ```
 
-```{r, echo=FALSE, warning=FALSE, message=FALSE, ref.label="w" }
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
 library(patchwork)
-(data_fuz %>% 
-  add_column(lat = dados$lat) %>% 
-  add_column(lon = dados$lon) %>%
-  ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
-  scale_color_manual(values = c("purple", "green3", "orange")) + 
-  geom_point(show.legend = F)+
-  facet_wrap(~group, labeller = grupos_labeller)+
-  ggtitle("Spatial distribution by group")+
-  xlim(c(-75, -35))+
-  ylim(c(-30, 10))+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthhires)
+
+BRA <- ne_states(country = "Brazil",
+                 returnclass = "sf")
+
+# (data_fuz %>% 
+#   add_column(lat = dados$lat) %>% 
+#   add_column(lon = dados$lon) %>%
+#   ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
+#   scale_color_manual(values = c("purple", "green3", "orange")) + 
+#   geom_point(show.legend = F)+
+(ggplot(BRA) +
+  geom_sf(fill = "white") +
+  coord_sf() +
+  geom_point(data = dados %>% add_column(group = data_fuz$group), mapping = aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.6))+
+  theme_void()+
+    scale_color_manual(values=c("purple", "green3", "orange2"))+
+   facet_wrap(~group, labeller = grupos_labeller)+
+#  ggtitle("Spatial distribution by group")+
+  # xlim(c(-75, -35))+
+  # ylim(c(-30, 10))+
   ylab("Latitude")+
   xlab("Longitude")+
-  theme(axis.title.y = element_text(size = 12),
-        axis.title.x = element_text(size = 12),
-        axis.text.y = element_text(size = 10)))/(reshape2::melt(mon.df  %>% 
-                         add_column(plot_id = dados$plot_id),
-                       id.vars = "plot_id",
-                       variable.name = "month",
-                       value.name = "evi2") %>%
-  add_column(Leaf_flush = rep(dados$Leaf_flush,12))%>%
-    add_column(group = rep(group,12)) %>%
-        filter(evi2 > 0) %>% 
-  ggplot(aes(y = evi2, x = month, color = factor(Leaf_flush), alpha = 0.6))+
-  geom_boxplot(show.legend = F)+
-  scale_color_manual(values = c("purple", "green3", "orange"))+
+  theme(axis.title.y = element_text(size = 12, angle = 90),
+         axis.title.x = element_text(size = 12),
+         axis.text.y = element_text(size = 10),
+         axis.text.x = element_text(angle = 90, size = 8),
+         legend.position = "bottom",
+        legend.title = element_text(size = 11))+
   labs(color = "Leaf flush")+
-  guides(size = "none", alpha = "none")+
-  facet_wrap(~factor(group), labeller = grupos_labeller)+
-  theme(axis.title.y = element_text(size = 12),
-        axis.title.x = element_text(size = 12),
-        axis.text.y = element_text(size = 10),
-        axis.text.x = element_text(angle = 90, size = 8))+
-    ggtitle("Annual cycle by group")+
-    xlab("Month"))
+  guides(size = "none", alpha = "none"))
+  # guides(size = "none", alpha = "none")
+  #/(reshape2::melt(mon.df  %>%
+  #                        add_column(plot_id = dados$plot_id),
+  #                      id.vars = "plot_id",
+  #                      variable.name = "month",
+  #                      value.name = "evi2") %>%
+  # add_column(Leaf_flush = rep(dados$Leaf_flush,12))%>%
+  #   add_column(group = rep(group,12)) %>%
+  #       filter(evi2 > 0) %>%
+  # ggplot(aes(y = evi2, x = month, color = factor(Leaf_flush), alpha = 0.6))+
+  # geom_boxplot(show.legend = F)+
+  # scale_color_manual(values = c("purple", "green3", "orange"))+
+  # labs(color = "Leaf flush")+
+  # guides(size = "none", alpha = "none")+
+  # facet_wrap(~factor(group), labeller = grupos_labeller)+
+  # theme(axis.title.y = element_text(size = 12),
+  #       axis.title.x = element_text(size = 12),
+  #       axis.text.y = element_text(size = 10),
+  #       axis.text.x = element_text(angle = 90, size = 8))+
+  #   ggtitle("Annual cycle by group")+
+  #   xlab("Month"))
 
 
 ```
@@ -535,6 +555,39 @@ plot_1541 <- quinze41 %>%
 ```
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
+require(patchwork)
+mil63 <- dados %>%
+  filter(plot_id == 1063) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+mil64 <- dados %>%
+  filter(plot_id == 1064) %>%
+  dplyr::select(dados1) %>%
+  unnest(cols = c(dados1))
+
+plot_1063 <- mil63 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Semideciduous from Amazon", subtitle = "Classified as group 2")
+
+plot_1064 <- mil64 %>% 
+  ggplot(aes(x = as.Date(date, format = "%Y-%m-%d"), y = without_missing$evi2))+
+  geom_line()+
+  geom_point(aes(y = evi2))+
+  ylab("EVI2")+
+  xlab("Date")+
+  ggtitle("Semideciduous from Amazon II", subtitle = "Classified as group 2")
+
+plot_1063/plot_1064
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 library(patchwork)
 (plot_3720 + labs(x = NULL))/(plot_3764)
 ```
@@ -543,6 +596,10 @@ library(patchwork)
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 (plot_1323 + labs(x = NULL))/(plot_1541)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
 ```
 
 
@@ -667,6 +724,8 @@ data_vid %>%
 
 ### As the MAP increases, the maximum coupling tends to approach zero, and its variance decreases. We can conclude that decreasing variance means vegetation communities has less strategies to deal with precipitation. Furthermore, the decreasing coupling is expected with increasing precipitation because water (from the sky) may not be a limiting factor to vegetation greenness.
 
+[Boulton et al., (2022)](https://www.nature.com/articles/s41558-022-01287-8)
+
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 
 data_fuz %>% 
@@ -689,37 +748,45 @@ data_fuz %>%
 ## **Spatial distribution of groups by coupling**
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-(data_fuz %>% 
-  add_column(lat = dados$lat) %>% 
-  add_column(lon = dados$lon) %>%
-  filter(coupling >= 0) %>%
-  ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
-  scale_color_manual(values = c("purple", "green3", "orange")) + 
-  geom_point(show.legend = F)+
-  facet_wrap(~group, labeller = grupos_labeller)+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthhires)
+
+BRA <- ne_states(country = "Brazil",
+                 returnclass = "sf")
+
+(ggplot(BRA) +
+  geom_sf(fill = "white") +
+  coord_sf() +
+  geom_point(data = dados %>% add_column(group = data_fuz$group) %>%  filter(coupling >= 0), mapping = aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.6), show.legend = F)+
+#  theme_void()+
+    scale_color_manual(values=c("purple", "green3", "orange2"))+
+   facet_wrap(~group, labeller = grupos_labeller)+
   ggtitle("Positive coupling")+
-  xlim(c(-75, -35))+
-  ylim(c(-30, 10))+
   ylab("Latitude")+
-  xlab("Longitude")+
+  xlab(NULL)+
+  guides(alpha = "none")+
   theme(axis.title.y = element_text(size = 12),
         axis.title.x = element_blank(),
-        axis.text.y = element_text(size = 10)))/(data_fuz %>% 
-  add_column(lat = dados$lat) %>% 
-  add_column(lon = dados$lon) %>%
-  filter(coupling < 0) %>%
-  ggplot(aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.5))+
-  scale_color_manual(values = c("purple", "green3", "orange")) + 
-  geom_point(show.legend = F)+
-  facet_wrap(~group, labeller = grupos_labeller)+
+        axis.text.y = element_text(size = 10),
+        axis.text.x = element_blank()))/(ggplot(BRA) +
+  geom_sf(fill = "white") +
+  coord_sf() +
+  geom_point(data = dados %>% add_column(group = data_fuz$group) %>%  filter(coupling < 0), mapping = aes(x = lon, y = lat, color = factor(Leaf_flush), alpha = 0.6))+
+#  theme_void()+
+    scale_color_manual(values=c("purple", "green3", "orange2"))+
+   facet_wrap(~group, labeller = grupos_labeller)+
   ggtitle("Negative coupling")+
-  xlim(c(-75, -35))+
-  ylim(c(-30, 10))+
   ylab("Latitude")+
   xlab("Longitude")+
+  guides(alpha = "none")+
+  labs(color = "Leaf flush")+
   theme(axis.title.y = element_text(size = 12),
-        axis.title.x = element_text(size = 12),
-        axis.text.y = element_text(size = 10)))
+        axis.title.x = element_text(size = 11),
+        axis.text.y = element_text(size = 10),
+        axis.text.x = element_text(angle = 90),
+        #legend.spacing.x = unit(1.5, 'cm'),
+        legend.position = c(1.4,1)))
 ```
 
 ## **Absoltute value of coupling x MAP**
@@ -745,3 +812,5 @@ data_fuz %>%
         axis.text.y = element_text(size = 10),
         axis.text.x = element_text(angle = 90, size = 8))
 ```
+
+
